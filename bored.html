@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>gfxvdz</title>
+<style>
+body {
+    margin: 0;
+    background: radial-gradient(circle at center, #050020, #000000);
+    overflow: hidden;
+    font-family: Arial, sans-serif;
+    color: white;
+}
+
+#title {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    opacity: 0.7;
+}
+
+#infoBox {
+    position: fixed;
+    max-width: 240px;
+    max-height: 220px;
+    overflow-y: auto;
+    background: rgba(0,0,0,0.7);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 13px;
+    display: none;
+}
+
+canvas { display: block; }
+</style>
+</head>
+<body>
+
+<div id="title">Enhanced Solar System • Hover a planet</div>
+<div id="infoBox"></div>
+<canvas id="space"></canvas>
+
+<script>
+const canvas = document.getElementById("space");
+const ctx = canvas.getContext("2d");
+const infoBox = document.getElementById("infoBox");
+
+function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+window.addEventListener("resize", resize);
+resize();
+
+const center = () => ({ x: canvas.width/2, y: canvas.height/2 });
+
+let paused = false;
+let hoveredPlanet = null;
+let sunPulse = 0;
+
+
+const planets = [
+    { name:"Mercury", color:"#aaa", size:3, dist:60,  speed:0.020, info:"Smallest planet" },
+    { name:"Venus",   color:"#c9a44c", size:6, dist:95,  speed:0.015, info:"Hottest planet" },
+    { name:"Earth",   color:"#2b6cff", size:6, dist:135, speed:0.010, info:"Our home" },
+    { name:"Mars",    color:"#c1440e", size:5, dist:175, speed:0.008, info:"Red planet" },
+    { name:"Jupiter", color:"#d2b48c", size:12,dist:235, speed:0.004, info:"Largest planet" },
+    { name:"Saturn",  color:"#e6d3a3", size:10,dist:295, speed:0.003, info:"Has rings" },
+    { name:"Uranus",  color:"#7fffd4", size:8, dist:350, speed:0.002, info:"Ice giant" },
+    { name:"Neptune", color:"#4169e1", size:8, dist:400, speed:0.0015,info:"Farthest planet" }
+];
+planets.forEach(p => p.angle = Math.random()*Math.PI*2);
+
+
+const asteroids = [];
+for (let i = 0; i < 200; i++) {
+    asteroids.push({
+        angle: Math.random()*Math.PI*2,
+        dist: 200 + Math.random()*30,
+        size: Math.random()*1.5 + 0.5,
+        speed: 0.006 + Math.random()*0.004
+    });
+}
+
+
+const stars = [];
+for (let i = 0; i < 200; i++) {
+    stars.push({
+        x: Math.random()*window.innerWidth,
+        y: Math.random()*window.innerHeight,
+        r: Math.random()*1.5 + 0.3
+    });
+}
+
+const nebula = [];
+for (let i = 0; i < 6; i++) {
+    nebula.push({
+        x: Math.random()*window.innerWidth,
+        y: Math.random()*window.innerHeight,
+        r: 150 + Math.random()*200,
+        color: `rgba(${50+Math.random()*100},0,${80+Math.random()*150},0.08)`
+    });
+}
+
+function drawBackground() {
+  
+    for (const n of nebula) {
+        const g = ctx.createRadialGradient(n.x,n.y,10,n.x,n.y,n.r);
+        g.addColorStop(0, n.color);
+        g.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(n.x,n.y,n.r,0,Math.PI*2);
+        ctx.fill();
+    }
+
+
+    ctx.fillStyle = "white";
+    for (const s of stars) {
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r, 0, Math.PI*2);
+        ctx.fill();
+    }
+}
+
+
+function drawSun() {
+    const c = center();
+    const pulse = 25 + Math.sin(sunPulse)*2;
+
+
+    const g = ctx.createRadialGradient(c.x, c.y, 10, c.x, c.y, 70);
+    g.addColorStop(0, "#fff7aa");
+    g.addColorStop(0.5, "#ffcc33");
+    g.addColorStop(1, "#ff8800");
+
+    ctx.shadowColor = "orange";
+    ctx.shadowBlur = 40;
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, pulse, 0, Math.PI*2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+ 
+    ctx.fillStyle = "rgba(255,180,50,0.08)";
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, pulse + 18, 0, Math.PI*2);
+    ctx.fill();
+
+    sunPulse += 0.03;
+}
+
+function drawOrbit(r) {
+    const c = center();
+    ctx.strokeStyle = "rgba(255,255,255,0.08)";
+    ctx.setLineDash([4,6]);
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, r, 0, Math.PI*2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+}
+
+function drawAsteroids() {
+    const c = center();
+    ctx.fillStyle = "#777";
+    for (const a of asteroids) {
+        const x = c.x + Math.cos(a.angle) * a.dist;
+        const y = c.y + Math.sin(a.angle) * a.dist;
+        ctx.beginPath();
+        ctx.arc(x, y, a.size, 0, Math.PI*2);
+        ctx.fill();
+        if (!paused) a.angle += a.speed;
+    }
+}
+
+function drawPlanet(p) {
+    const c = center();
+    const x = c.x + Math.cos(p.angle) * p.dist;
+    const y = c.y + Math.sin(p.angle) * p.dist;
+
+    p.screenX = x;
+    p.screenY = y;
+
+    drawOrbit(p.dist);
+
+    ctx.save();
+    if (p.name === "Uranus") {
+        ctx.translate(x,y);
+        ctx.rotate(0.8);
+        ctx.translate(-x,-y);
+    }
+
+    if (p.name === "Jupiter") {
+        const grad = ctx.createLinearGradient(x-p.size,y-p.size,x+p.size,y+p.size);
+        grad.addColorStop(0,"#d2b48c");
+        grad.addColorStop(0.5,"#c2a070");
+        grad.addColorStop(1,"#e0c090");
+        ctx.fillStyle = grad;
+    } else {
+        ctx.fillStyle = p.color;
+    }
+
+    ctx.shadowColor = p.color;
+    ctx.shadowBlur = hoveredPlanet===p ? 25 : 10;
+
+    ctx.beginPath();
+    ctx.arc(x, y, p.size, 0, Math.PI*2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    ctx.restore();
+
+ 
+    if (p.name === "Saturn") {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(0.4);
+        ctx.strokeStyle = "rgba(230,211,163,0.7)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.ellipse(0,0,p.size+12,p.size+4,0,0,Math.PI*2);
+        ctx.stroke();
+        ctx.strokeStyle = "rgba(230,211,163,0.4)";
+        ctx.beginPath();
+        ctx.ellipse(0,0,p.size+7,p.size+2.5,0,0,Math.PI*2);
+        ctx.stroke();
+        ctx.restore();
+    }
+
+
+    if (p.name === "Earth") {
+        p.moonAngle = (p.moonAngle || 0) + (paused ? 0 : 0.05);
+        const mx = x + Math.cos(p.moonAngle) * 12;
+        const my = y + Math.sin(p.moonAngle) * 12;
+        ctx.fillStyle = "#ccc";
+        ctx.beginPath();
+        ctx.arc(mx, my, 2, 0, Math.PI*2);
+        ctx.fill();
+    }
+
+    if (!paused) p.angle += p.speed;
+}
+
+
+canvas.addEventListener("mousemove", e => {
+    hoveredPlanet = null;
+    paused = false;
+    infoBox.style.display = "none";
+
+    for (const p of planets) {
+        if (!p.screenX) continue;
+        const dx = e.clientX - p.screenX;
+        const dy = e.clientY - p.screenY;
+        const d = Math.sqrt(dx*dx + dy*dy);
+        const hit = p.name === "Saturn" ? p.size+14 : p.size+6;
+
+        if (d < hit) {
+            hoveredPlanet = p;
+            paused = true;
+            infoBox.style.display = "block";
+            infoBox.style.left = (e.clientX + 15) + "px";
+            infoBox.style.top  = (e.clientY + 15) + "px";
+            infoBox.innerHTML = `<b>${p.name}</b><br>${p.info}`;
+            break;
+        }
+    }
+});
+
+
+function animate() {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    drawBackground();
+    drawSun();
+
+    planets.forEach(drawPlanet);
+    drawAsteroids();
+
+    requestAnimationFrame(animate);
+}
+
+animate();
+</script>
+</body>
+</html>
